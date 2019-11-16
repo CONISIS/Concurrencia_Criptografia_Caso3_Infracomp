@@ -36,21 +36,13 @@ public class Client
 
     public static final String AES = "AES";
 
-    public static final String BLOWFISH = "Blowfish";
-
     // ALGORITMOS ASIMÉTRICOS
 
     public static final String RSA = "RSA";
 
     // ALGORITMOS HMAC
 
-    public static final String SHA1 = "HMACSHA1";
-
     public static final String SHA256 = "HMACSHA256";
-
-    public static final String SHA384 = "HMACSHA384";
-
-    public static final String SHA512 = "HMACSHA512";
     
 
     // ATRIBUTOS
@@ -59,12 +51,10 @@ public class Client
 
     private BufferedReader inServidor;
 
-    private BufferedReader inUsuario;
-
     private PrintWriter out;
-    
+
     private String hmac = "";
-    
+
     private String simetrico = "";
     
     private Key KW;
@@ -72,20 +62,20 @@ public class Client
     private SecretKey KS;
     
     public String reto = "reto";
-    
-    public String cc = "20876";
-    
-    public String clave = "holas";
+
+    public static String ip = "localhost";
+    public static int puerto = 8000;
+    public String cc = "2087";
+    public String clave = "hola";
 
     // CONSTRUCTOR
 
-    public Client(BufferedReader in, String ip, int pPuerto)
+    public Client()
     {
         try
         {
-            canal = new Socket(ip, pPuerto);
+            canal = new Socket(ip, puerto);
             inServidor = new BufferedReader(new InputStreamReader(canal.getInputStream()));
-            inUsuario = in;
             out = new PrintWriter(canal.getOutputStream(), true);
         }
         catch (IOException e)
@@ -96,28 +86,6 @@ public class Client
     }
 
     // MÉTODOS
-
-    public static void main(String[] args)
-    {
-        try
-        {
-            BufferedReader input = new BufferedReader(new InputStreamReader(System.in));
-            System.out.println("Ingrese la ip por el que se desea conectar");
-            String ip = input.readLine();
-            System.out.println("Ingrese el puerto por el que se desea conectar");
-            int puerto = Integer.parseInt(input.readLine());
-            Client cliente = new Client(input, ip, puerto);
-            cliente.comunicacion1();
-            String certificado = cliente.getInServidor().readLine();
-            cliente.comunicacion2(certificado);
-            cliente.comunicacion3();
-            cliente.comunicacion4();
-        }
-        catch (Exception e)
-        {
-            e.printStackTrace();
-        }
-    }
 
     public Socket getCanal()
     {
@@ -139,15 +107,6 @@ public class Client
         this.inServidor = inServidor;
     }
 
-    public BufferedReader getInUsuario()
-    {
-        return inUsuario;
-    }
-
-    public void setInUsuario(BufferedReader inUsuario)
-    {
-        this.inUsuario = inUsuario;
-    }
 
     public PrintWriter getOut()
     {
@@ -171,27 +130,8 @@ public class Client
             getOut().println(HOLA);
             if (ERROR.equals(getInServidor().readLine()))
                 throw new Exception("Hubo un error al iniciar la comunicación con el servidor");
-            System.out.println();
-            System.out.println("Seleccione el algoritmo simetrico que quiere :usar (1,2) \n" +
-                                       "1) AES\n" +
-                                       "2) Blowfish");
-            int res1 = Integer.parseInt(getInUsuario().readLine());
-            simetrico = res1 == 1 ? AES : BLOWFISH;
-            System.out.println("Seleccione el algoritmo HMAC que quiere :usar (1,2,3,4) \n" +
-                                       "1) HmacSHA1\n" +
-                                       "2) HmacSHA256\n" +
-                                       "3) HmacSHA384\n" +
-                                       "4) HmacSHA512");
-            int res2 = Integer.parseInt(getInUsuario().readLine());
-            if (1 == res2)
-                hmac = SHA1;
-            else if (2 == res2)
-                hmac = SHA256;
-            else if (3 == res2)
-                hmac = SHA384;
-            else
-                hmac = SHA512;
-            System.out.println(ALGORITMOS + SEPARADOR + simetrico + SEPARADOR + RSA + SEPARADOR + hmac);
+            hmac = SHA256;
+            simetrico = AES;
             getOut().println(ALGORITMOS + SEPARADOR + simetrico + SEPARADOR + RSA + SEPARADOR + hmac);
             if (ERROR.equals(getInServidor().readLine()))
                 throw new Exception("Hubo un error al enviar algoritmos de cifrado al servidor");
@@ -231,9 +171,8 @@ public class Client
 
     		KeyGenerator keyGen = KeyGenerator.getInstance(simetrico);
     	    KS = keyGen.generateKey();
-    		
-    		
-			Cipher cifrador = Cipher.getInstance("RSA");
+
+            Cipher cifrador = Cipher.getInstance("RSA");
 			cifrador.init(Cipher.ENCRYPT_MODE, KW);
 			retoCifrado = cifrador.doFinal(KS.getEncoded());
 			
@@ -244,12 +183,6 @@ public class Client
 			e.printStackTrace();
 			System.out.println("Hubo un error al cifrar el mensaje");
 		}
-    	
-    	//crear multiplos de 4
-    	while(reto.length()%4!=0){
-    		reto=reto+"0";
-    	}
-    	
     	
     	//Envia reto
     	getOut().println(reto);
@@ -274,40 +207,12 @@ public class Client
 			e.printStackTrace();
 		}
     }
-   
-
-    
-    
 
     /**
      * Etapa 3 del protocolo de comunicación, se autenticará al cliente.
      */
     public void comunicacion3()
     {
-    	//input
-        
-        try {
-        	System.out.println("Escriba su cc");
-			cc = getInUsuario().readLine();
-		
-        
-	        System.out.println("Escriba su clave");
-	        clave = getInUsuario().readLine();
-        
-        } catch (IOException e1) {
-			e1.printStackTrace();
-		}
-        
-        
-    	//crear multiplos de 4
-    	while(cc.length()%4!=0){
-    		cc=cc+"0";
-    	}
-    	
-    	while(clave.length()%4!=0){
-    		clave=clave+"0";
-    	}
-    	
     	Cipher cifrador;
 		try {
 			
@@ -335,9 +240,6 @@ public class Client
      */
     public void comunicacion4()
     {
-    	
-    	
-    	
     	Cipher cifrador;
 		try {
 			cifrador = Cipher.getInstance(simetrico);
@@ -371,8 +273,6 @@ public class Client
 		} catch (Exception e) {
 			e.printStackTrace();
 		}
-		
-    	
     }
     
     public static void imprimirByte(byte[] a){
