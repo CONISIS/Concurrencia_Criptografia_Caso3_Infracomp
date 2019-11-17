@@ -1,20 +1,21 @@
 package servidor;
 
-import java.io.BufferedReader;
-import java.io.File;
-import java.io.FileWriter;
-import java.io.InputStreamReader;
-import java.io.PrintWriter;
+import javax.crypto.SecretKey;
+import javax.crypto.spec.SecretKeySpec;
+import javax.management.Attribute;
+import javax.management.AttributeList;
+import javax.management.MBeanServer;
+import javax.management.ObjectName;
+import javax.xml.bind.DatatypeConverter;
+import java.io.*;
+import java.lang.management.ManagementFactory;
 import java.net.Socket;
 import java.security.KeyPair;
 import java.security.cert.X509Certificate;
 import java.util.Random;
 
-import javax.crypto.SecretKey;
-import javax.crypto.spec.SecretKeySpec;
-import javax.xml.bind.DatatypeConverter;
-
-public class D extends Thread {
+public class D implements Runnable
+{
 
 	public static final String OK = "OK";
 	public static final String ALGORITMOS = "ALGORITMOS";
@@ -34,6 +35,9 @@ public class D extends Thread {
 	private static File file;
 	private static X509Certificate certSer;
 	private static KeyPair keyPairServidor;
+	private long timeConsumed = 0;
+	private double cpuConsumed = 0;
+	private boolean fail = false;
 	
 	public static void init(X509Certificate pCertSer, KeyPair pKeyPairServidor, File pFile) {
 		certSer = pCertSer;
@@ -43,7 +47,7 @@ public class D extends Thread {
 	
 	public D (Socket csP, int idP) {
 		sc = csP;
-		dlg = new String("delegado " + idP + ": ");
+		dlg = "delegado " + idP + ": ";
 		try {
 		mybyte = new byte[520]; 
 		mybyte = certSer.getEncoded();
@@ -68,8 +72,8 @@ public class D extends Thread {
 	 * - Debe conservar el metodo como está. 
 	 * - Es el único metodo permitido para escribir en el log.
 	 */
-	private void escribirMensaje(String pCadena) {
-		
+	private synchronized void escribirMensaje(String pCadena)
+	{
 		try {
 			FileWriter fw = new FileWriter(file,true);
 			fw.write(pCadena + "\n");
@@ -77,7 +81,21 @@ public class D extends Thread {
 		} catch (Exception e) {
 			e.printStackTrace();
 		}
+	}
 
+	private synchronized void escribirRendimiento(long time, double cpu, boolean fail)
+	{
+		try
+		{
+			File monitor = new File("./docs/rendimiento.csv");
+			FileWriter fw = new FileWriter(monitor, true);
+			fw.write(time + "," + cpu + "," + fail + "\n");
+			fw.close();
+		}
+		catch (Exception e)
+		{
+			e.printStackTrace();
+		}
 	}
 
 	public void run() {
@@ -143,6 +161,8 @@ public class D extends Thread {
 				/***** Fase 4: *****/
 				cadenas[3] = "";
 				linea = dc.readLine();
+				long time1 = System.currentTimeMillis();
+				double cpu1 = getSystemCpuLoad();
 				byte[] llaveSimetrica = S.ad(
 						toByteArray(linea), 
 						keyPairServidor.getPrivate(), algoritmos[2] );
@@ -196,7 +216,9 @@ public class D extends Thread {
 				byte[] recibo = S.ae(hmac, keyPairServidor.getPrivate(), algoritmos[2]);
 				ac.println(toHexString(recibo));
 				System.out.println(dlg + "envio hmac cifrado con llave privada del servidor. continuado.");
-				
+				long time2 = System.currentTimeMillis();
+				double cpu2 = getSystemCpuLoad();
+
 				cadenas[7] = "";
 				linea = dc.readLine();	
 				if (linea.equals(OK)) {
@@ -208,12 +230,21 @@ public class D extends Thread {
 				}
 		        sc.close();
 
-			    for (int i=0;i<numCadenas;i++) {
-				    escribirMensaje(cadenas[i]);
-			    }
+				String log = cadenas[0] + "\n" + cadenas[1] + "\n" + cadenas[2] + "\n" + cadenas[3] + "\n"
+						+ cadenas[4] + "\n" + cadenas[5] + "\n" + cadenas[6] + "\n" + cadenas[7] + "\n";
+				escribirMensaje(log);
+
+				timeConsumed = time2 - time1;
+				cpuConsumed = cpu2 - cpu1;
+
 	        } catch (Exception e) {
 	          e.printStackTrace();
+				fail = true;
 	        }
+			finally
+			{
+				escribirRendimiento(timeConsumed, cpuConsumed, fail);
+			}
 	}
 	
 	public static String toHexString(byte[] array) {
@@ -223,5 +254,20 @@ public class D extends Thread {
 	public static byte[] toByteArray(String s) {
 	    return DatatypeConverter.parseBase64Binary(s);
 	}
-	
+
+	public double getSystemCpuLoad() throws Exception
+	{
+		MBeanServer mbs = ManagementFactory.getPlatformMBeanServer();
+		ObjectName name = ObjectName.getInstance("java.lang:type=OperatingSystem");
+		AttributeList list = mbs.getAttributes(name, new String[]{"SystemCpuLoad"});
+		if (list.isEmpty())
+			return Double.NaN;
+		Attribute att = (Attribute) list.get(0);
+		Double value = (Double) att.getValue();
+		// usually takes a couple of seconds before we get real values
+		if (value == -1.0)
+			return Double.NaN;
+		// returns a percentage value with 1 decimal point precision
+		return ((int) (value * 1000) / 10.0);
+	}
 }
